@@ -1,0 +1,46 @@
+server {
+    listen 80;
+    server_name symfony2.dev;
+    root /vagrant/demo/web/;
+
+    #fixes the issue for files not being refreshed
+    sendfile off; 
+
+    location / {
+        index index.html index.php; ## Allow a static html file to be shown first
+        try_files $uri $uri/ @handler; ## If missing pass the URI to Magento's front handler
+        expires 30d; ## Assume all files are cachable
+    }
+
+    
+    location  /. { ## Disable .htaccess and other hidden files
+        return 404;
+    }
+
+    location @handler { ## Magento uses a common front handler
+        rewrite / /app_dev.php;
+    }
+
+    location ~ .php/ { ## Forward paths like /js/index.php/x.js to relevant handler
+        rewrite ^(.*.php)/ $1 last;
+    }
+
+    location ~ .php$ { ## Execute PHP scripts
+        if (!-e $request_filename) { rewrite / /index.php last; } ## Catch 404s that try_files miss
+
+        expires        off; ## Do not cache dynamic content
+        #fastcgi_pass    127.0.0.1:9000; #hhvm
+        fastcgi_pass   unix:/var/run/php5-fpm.sock;
+        #fastcgi_param  HTTPS $fastcgi_https;
+        fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+        fastcgi_param  MAGE_RUN_CODE default; ## Store code is defined in administration > Configuration > Manage Stores
+        fastcgi_param  MAGE_RUN_TYPE store;
+        fastcgi_buffers 16 16k;
+        fastcgi_buffer_size 32k;
+        fastcgi_read_timeout 180;
+        include        fastcgi_params; ## See /etc/nginx/fastcgi_params
+
+        client_max_body_size 100m;
+    }
+
+}
